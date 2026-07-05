@@ -12,6 +12,8 @@ Universidad Nacional de Ingeniería
 
 6 de junio del 2026
 
+_Actualizado el 5 de julio de 2026: la sección 2.3 y las secciones 3 y 4 incorporan los hallazgos del análisis de resistencia diferencial mediante MILP._
+
 ---
 
 ## 1. Objetivo
@@ -57,7 +59,7 @@ Corresponde a la función `sigma(state, intentos_fallidos)` que recorre la matri
 
 $$\text{state}[x][y] = \text{state}[x][y] \oplus (\text{intentos\\_fallidos} \ll (x+y))$$
 
-Esto dificultaría toda posibilidad de ataques básicos que necesitan del determinismo del algoritmo sin importar el número de intentos fallidos.
+El término `intentos_fallidos << (x+y)` es una constante conocida que no depende de los datos del mensaje, así que un XOR con esa constante no altera la diferencia entre dos entradas relacionadas: no aporta resistencia frente a un ataque de criptoanálisis diferencial clásico. El único efecto de `sigma` que sí afecta la propagación diferencial es la rotación posterior, equivalente en efecto a un segundo `rho`. Esta corrección se sustenta en el análisis cuantitativo de la sección 3.
 
 <img width="582" height="191" alt="image" src="https://github.com/user-attachments/assets/27d3fb3f-b456-43e1-979e-50e692e20b72" />
 
@@ -93,7 +95,7 @@ Esta propiedad se demuestra experimentalmente mediante el pequeño script de pru
 
 ## 3. Resultados
 
-Al aumentar `intentos_fallidos` el número de rondas crece de 8 a 24 y los pasos se reordenan agregando el paso adicional `sigma`. En consecuencia, el costo computacional aumenta de forma con el número de fallos. Esto se verifica en el primer párrafo de la ejecuci{on del segundo bloque de `implementacion.ipynb`.
+Al aumentar `intentos_fallidos` el número de rondas crece de 8 a 24 y los pasos se reordenan agregando el paso adicional `sigma`. En consecuencia, el costo computacional aumenta con el número de fallos. Esto se verifica en el primer párrafo de la ejecución del segundo bloque de `implementacion.ipynb`.
 
 <img width="383" height="37" alt="image" src="https://github.com/user-attachments/assets/3fd3e358-724b-4c92-adb7-05166e0a291a" />
 
@@ -101,6 +103,22 @@ Asimismo, debido a la naturaleza no conmutativa de las funciones internas, una m
 
 <img width="589" height="50" alt="image" src="https://github.com/user-attachments/assets/f981e564-1485-4aff-a28d-ead624730770" />
 
+### 3.1. Análisis cuantitativo de resistencia diferencial (MILP)
+
+Además de medir el costo computacional, se construyó un modelo de Programación Lineal Entera Mixta (MILP) para determinar el número mínimo de S-boxes activas de un trail diferencial en esta variante (ver `MILP_AES_Keccak_modificado.ipynb` e informe adjunto). Los hallazgos principales:
+
+- Para 1 ronda, el peso mínimo de un trail diferencial es exactamente 2, tanto para el orden clásico como para el orden experimental, y para los dos anchos de palabra probados. Esto se probó tanto por MILP exacto como algebraicamente mediante inversión GF(2) de theta compuesto con rho.
+- Para 2 y 3 rondas, las cotas superiores construidas crecen rápidamente (de 20 a 93, según el caso), y para los rangos completos de rondas asociados a `intentos_fallidos` (8, 17 y 24 rondas) el peso llega a cientos o miles, un valor computacionalmente inviable de explotar en un ataque real.
+- En ningún escenario evaluado la variante se rompe frente a criptoanálisis diferencial clásico, incluso en el peor caso (8 rondas, `intentos_fallidos` bajo).
+- Sin embargo, el término XOR de `sigma` y la constante de ronda modificada de `iota` no aportan resistencia diferencial adicional (ver corrección en la sección 2.3): son transparentes frente a este tipo de ataque, ya que su efecto se cancela igual que cualquier constante conocida de ronda.
+- El riesgo real no está en la resistencia diferencial de las rondas ejecutadas, sino en que el número de rondas deja de ser una constante de diseño: mientras `intentos_fallidos < 16`, la variante opera con menos de las 24 rondas estándar, y ese contador podría ser observable o influenciable por un atacante.
+
 ## 4. Conclusión
 
 La propuesta en `implementacion.ipynb` transforma la permutación estática `keccak_f1600` en una variante dependiente del contexto, `keccak_f1600_variante`, controlada por `intentos_fallidos`. Las cinco alteraciones (rondas dinámicas, reordenamiento, nuevo paso `sigma`, `iota` dinámica y la prueba de no conmutatividad) son pequeñas y están comentadas.
+
+Un análisis cuantitativo posterior mediante MILP (sección 3.1) muestra que la variante no se rompe frente a criptoanálisis diferencial clásico en ninguno de los escenarios evaluados. Las dos debilidades reales que expone ese análisis son: primero, que el número de rondas deja de ser una constante de diseño y depende de un contador mutable, reduciendo el margen de seguridad garantizado mientras `intentos_fallidos < 16`; y segundo, que las partes dinámicas de `sigma` e `iota` basadas en XOR de una constante conocida no aportan resistencia diferencial adicional, ya que son transparentes frente a este tipo de ataque.
+
+## 5. Referencias
+
+Análisis completo de resistencia diferencial (modelo MILP, verificación algebraica GF(2), experimentos y resultados): informe adjunto y `MILP_AES_Keccak_modificado.ipynb`.
